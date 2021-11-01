@@ -8,9 +8,11 @@ export default async function drawBanner(avatarUrl: string, nickname: string, ta
 
     const canvas = new Canvas(background.width, background.height);
     const ctx = canvas.getContext('2d');
+
+    ctx.drawImage(background, 0, 0, background.width, background.height);
     
     if (config.avatar) {
-        drawAvatar(ctx, avatarUrl, config.avatar);
+        await drawAvatar(ctx, avatarUrl, config.avatar);
     }
     if (config.nickname) {
         drawNickname(ctx, nickname, tag, config.nickname);
@@ -27,6 +29,8 @@ export default async function drawBanner(avatarUrl: string, nickname: string, ta
             ctx.strokeRect(0, 0, canvas.width, canvas.height);
         });
     }
+
+    return canvas.toBuffer();
 }
 
 async function getBackground(backgroundUrl: string): Promise<Image> {
@@ -61,6 +65,7 @@ async function getBackground(backgroundUrl: string): Promise<Image> {
 async function drawAvatar(ctx: NodeCanvasRenderingContext2D, avatarUrl: string, config: IBannerAvatar) {
     ctx.save();
     const avatar = await loadImage(avatarUrl);
+    console.log(avatar);
     
     const rounded = config.rounded === undefined ? true : config.rounded;
 
@@ -209,14 +214,39 @@ function calculateTextFontSize(ctx: NodeCanvasRenderingContext2D, text: string, 
     // And multiply font size by our proportion multiplier, rounding it down, coz I like nice rounded numbers
     size = Math.floor(size * proportion);
 
+    // But sometimes it doesn't work, so let's do a loop here. We're close anyways, so it's not very expensive
+    ctx.font = `${size}px '${fontFamily}'`;
+    metrics = ctx.measureText(text);
+
+    console.log("Size:", size);
+
+    while (metrics.width > maxWidth) {
+        size--;
+        ctx.font = `${size}px '${fontFamily}'`;
+        metrics = ctx.measureText(text);
+    }
+
+    console.log("Size after loop:", size);
+
     // The same with height now
     if (maxHeight) {
         ctx.font = `${size}px '${fontFamily}'`;
         metrics = ctx.measureText(text);
-        const height = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
+        let height = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
         if (height > maxHeight) {
             const proportion = maxHeight / height;
             size = Math.floor(size * proportion);
+
+            ctx.font = `${size}px '${fontFamily}'`;
+            metrics = ctx.measureText(text);
+            height = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
+
+            while (height > maxHeight) {
+                size--;
+                ctx.font = `${size}px '${fontFamily}'`;
+                metrics = ctx.measureText(text);
+                height = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
+            }
         }
     }
 
